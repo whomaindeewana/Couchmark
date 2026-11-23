@@ -1,0 +1,55 @@
+<Application x:Class="Couchmark.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:converters="clr-namespace:Couchmark.Converters"
+             xmlns:extensions="clr-namespace:Couchmark.Extensions">
+
+    <!--
+        App.xaml: Application-level resources.
+        The startup logic (DI host, migrations) is in App.xaml.cs.
+        We do NOT set StartupUri here — the window is shown programmatically
+        after the DI container is ready.
+    -->
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+
+                <!--
+                    WPF-UI theme resource.
+                    ThemesDictionary provides the Fluent dark/light colour tokens
+                    used across all WPF-UI controls (NavigationView, buttons, cards, etc.)
+                -->
+                <ui:ThemesDictionary Theme="Dark" />
+
+                <!--
+                    WPF-UI control styles.
+                    ControlsDictionary applies the Fluent style templates to standard
+                    WPF controls (Button, TextBox, ComboBox, etc.) automatically.
+                -->
+                <ui:ControlsDictionary />
+
+            </ResourceDictionary.MergedDictionaries>
+
+            <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+            <converters:IntToVisibilityConverter x:Key="IntToVisibilityConverter" />
+            <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
+
+            <!-- Couchmark Dynamic Theme Brushes -->
+            <SolidColorBrush x:Key="CouchmarkBackgroundBrush" Color="#0B132B" />
+            <SolidColorBrush x:Key="CouchmarkCardBrush" Color="#1C2541" />
+            <SolidColorBrush x:Key="CouchmarkCardBorderBrush" Color="#3A506B" />
+            <SolidColorBrush x:Key="CouchmarkTextPrimaryBrush" Color="#EDF2F4" />
+            <SolidColorBrush x:Key="CouchmarkTextSecondaryBrush" Color="#8D99AE" />
+
+            <!-- Global ScrollViewer Mouse Wheel Scrolling Behavior -->
+            <Style TargetType="{x:Type ScrollViewer}">
+                <Setter Property="extensions:ScrollViewerExtensions.EnableMouseWheelScroll" Value="True" />
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+
+</Application>

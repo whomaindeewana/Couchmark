@@ -1,0 +1,244 @@
+<Page x:Class="Couchmark.Views.HomeView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:extensions="clr-namespace:Couchmark.Extensions">
+
+    <Page.Resources>
+        <!-- Continue Watching Card Template -->
+        <DataTemplate x:Key="ContinueWatchingCardTemplate">
+            <ui:CardAction Margin="0,0,16,16" Padding="0" Width="200" Height="300" Cursor="Hand"
+                           IsChevronVisible="False" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                           Command="{Binding DataContext.CardClickedCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                           CommandParameter="{Binding}"
+                           Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Page}}">
+                <ui:CardAction.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Resume Playback"
+                                  Command="{Binding PlacementTarget.Tag.CardClickedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Toggle Watched"
+                                  Command="{Binding PlacementTarget.Tag.ToggleWatchedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <Separator />
+                        <MenuItem Header="Open File Location"
+                                  Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                    </ContextMenu>
+                </ui:CardAction.ContextMenu>
+
+                <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Grid.Clip>
+                        <RectangleGeometry Rect="0,0,200,300" RadiusX="8" RadiusY="8" />
+                    </Grid.Clip>
+                    <Image Source="{Binding PosterPath}" Stretch="UniformToFill" />
+                    
+                    <Border VerticalAlignment="Bottom" Background="#D8000000" Padding="12">
+                        <StackPanel>
+                            <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Subtitle}" Foreground="LightGray" FontSize="12" Margin="0,4,0,8" TextTrimming="CharacterEllipsis" />
+                            
+                            <!-- Progress Bar -->
+                            <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="4" 
+                                         Visibility="{Binding ShowProgress, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </ui:CardAction>
+        </DataTemplate>
+
+        <!-- Recently Added Shows Card Template -->
+        <DataTemplate x:Key="RecentShowCardTemplate">
+            <ui:CardAction Margin="0,0,16,16" Padding="0" Width="200" Height="300" Cursor="Hand"
+                           IsChevronVisible="False" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                           Command="{Binding DataContext.CardClickedCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                           CommandParameter="{Binding}"
+                           Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Page}}">
+                <ui:CardAction.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="View Details"
+                                  Command="{Binding PlacementTarget.Tag.CardClickedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Toggle Watched All"
+                                  Command="{Binding PlacementTarget.Tag.ToggleWatchedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <Separator />
+                        <MenuItem Header="Open Folder Location"
+                                  Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                    </ContextMenu>
+                </ui:CardAction.ContextMenu>
+
+                <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Grid.Clip>
+                        <RectangleGeometry Rect="0,0,200,300" RadiusX="8" RadiusY="8" />
+                    </Grid.Clip>
+                    <Image Source="{Binding PosterPath}" Stretch="UniformToFill" />
+                    <Border VerticalAlignment="Bottom" Background="#D8000000" Padding="12">
+                        <StackPanel>
+                            <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Subtitle}" Foreground="LightGray" FontSize="12" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </ui:CardAction>
+        </DataTemplate>
+
+        <!-- Recently Added Movies Card Template -->
+        <DataTemplate x:Key="RecentMovieCardTemplate">
+            <ui:CardAction Margin="0,0,16,16" Padding="0" Width="200" Height="300" Cursor="Hand"
+                           IsChevronVisible="False" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                           Command="{Binding DataContext.CardClickedCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                           CommandParameter="{Binding}"
+                           Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Page}}">
+                <ui:CardAction.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="View Details"
+                                  Command="{Binding PlacementTarget.Tag.ViewMovieDetailsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Play Movie"
+                                  Command="{Binding PlacementTarget.Tag.PlayMovieCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Toggle Watched"
+                                  Command="{Binding PlacementTarget.Tag.ToggleWatchedCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                        <Separator />
+                        <MenuItem Header="Open File Location"
+                                  Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                  CommandParameter="{Binding}" />
+                    </ContextMenu>
+                </ui:CardAction.ContextMenu>
+
+                <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                    <Grid.Clip>
+                        <RectangleGeometry Rect="0,0,200,300" RadiusX="8" RadiusY="8" />
+                    </Grid.Clip>
+                    <Image Source="{Binding PosterPath}" Stretch="UniformToFill" />
+                    <Border VerticalAlignment="Bottom" Background="#D8000000" Padding="12">
+                        <StackPanel>
+                            <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Subtitle}" Foreground="LightGray" FontSize="12" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </ui:CardAction>
+        </DataTemplate>
+    </Page.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  extensions:ScrollViewerExtensions.EnableMouseWheelScroll="True">
+        <StackPanel Margin="32">
+            
+            <!-- Hero Banner -->
+            <Border Background="{DynamicResource CouchmarkCardBrush}" 
+                    BorderBrush="{DynamicResource CouchmarkCardBorderBrush}" 
+                    BorderThickness="1" CornerRadius="12" Padding="32" Margin="0,0,0,32">
+                <StackPanel>
+                    <TextBlock Text="{Binding HeroTitle}" 
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}" 
+                               FontSize="32" FontWeight="Bold" Margin="0,0,0,8" />
+                    <TextBlock Text="{Binding HeroSubtitle}" 
+                               Foreground="{DynamicResource CouchmarkTextSecondaryBrush}" 
+                               FontSize="15" />
+                </StackPanel>
+            </Border>
+
+            <!-- ── ORDER 1: Continue Watching First ────────────────────────── -->
+            <StackPanel Visibility="{Binding IsContinueWatchingFirst, Converter={StaticResource BoolToVisibilityConverter}}">
+                <!-- Continue Watching Row -->
+                <StackPanel Visibility="{Binding ShowContinueWatching, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="Continue Watching" 
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
+                               Visibility="{Binding ContinueWatchingItems.Count, Converter={StaticResource IntToVisibilityConverter}}" />
+                    <ItemsControl ItemsSource="{Binding ContinueWatchingItems}" ItemTemplate="{StaticResource ContinueWatchingCardTemplate}" Margin="0,0,0,28">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- Recently Added TV Shows Row -->
+                <StackPanel Visibility="{Binding ShowRecentlyAddedShows, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="Recently Added TV Shows" 
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
+                               Visibility="{Binding RecentlyAddedShows.Count, Converter={StaticResource IntToVisibilityConverter}}" />
+                    <ItemsControl ItemsSource="{Binding RecentlyAddedShows}" ItemTemplate="{StaticResource RecentShowCardTemplate}" Margin="0,0,0,28">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- Recently Added Movies Row -->
+                <StackPanel Visibility="{Binding ShowRecentlyAddedMovies, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="Recently Added Movies" 
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
+                               Visibility="{Binding RecentlyAddedMovies.Count, Converter={StaticResource IntToVisibilityConverter}}" />
+                    <ItemsControl ItemsSource="{Binding RecentlyAddedMovies}" ItemTemplate="{StaticResource RecentMovieCardTemplate}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- ── ORDER 2: Recently Added First ──────────────────────────── -->
+            <StackPanel Visibility="{Binding IsContinueWatchingFirst, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                <!-- Recently Added TV Shows Row -->
+                <StackPanel Visibility="{Binding ShowRecentlyAddedShows, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="Recently Added TV Shows" 
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
+                               Visibility="{Binding RecentlyAddedShows.Count, Converter={StaticResource IntToVisibilityConverter}}" />
+                    <ItemsControl ItemsSource="{Binding RecentlyAddedShows}" ItemTemplate="{StaticResource RecentShowCardTemplate}" Margin="0,0,0,28">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- Recently Added Movies Row -->
+                <StackPanel Visibility="{Binding ShowRecentlyAddedMovies, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="Recently Added Movies" 
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
+                               Visibility="{Binding RecentlyAddedMovies.Count, Converter={StaticResource IntToVisibilityConverter}}" />
+                    <ItemsControl ItemsSource="{Binding RecentlyAddedMovies}" ItemTemplate="{StaticResource RecentMovieCardTemplate}" Margin="0,0,0,28">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- Continue Watching Row -->
+                <StackPanel Visibility="{Binding ShowContinueWatching, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock Text="Continue Watching" 
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
+                               Visibility="{Binding ContinueWatchingItems.Count, Converter={StaticResource IntToVisibilityConverter}}" />
+                    <ItemsControl ItemsSource="{Binding ContinueWatchingItems}" ItemTemplate="{StaticResource ContinueWatchingCardTemplate}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

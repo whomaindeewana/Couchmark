@@ -1,0 +1,28 @@
+## .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+.vs/
+
+## Temporary debug scripts
+check_db.cs
+inject.cs
+test.cs
+testdb.csx
+temp_db_check/
+
+## App user data (never commit personal config or cache)
+appsettings.local.json
+Couchmark.db
+Couchmark.db-shm
+Couchmark.db-wal
+
+## Logs
+logs/
+*.log
+
+## OS
+.DS_Store
+Thumbs.db
