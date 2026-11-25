@@ -29,16 +29,13 @@
                            FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,24,0" />
 
                 <!-- Live Search Box -->
-                <TextBox Grid.Column="1"
-                         Text="{Binding SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                         MaxWidth="340" Height="36"
-                         HorizontalAlignment="Left" VerticalAlignment="Center"
-                         Padding="12,6"
-                         FontSize="14"
-                         Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
-                         Background="{DynamicResource CouchmarkCardBrush}"
-                         BorderBrush="{DynamicResource CouchmarkCardBorderBrush}"
-                         BorderThickness="1" />
+                <ui:TextBox Grid.Column="1"
+                            PlaceholderText="Search movies by title or genre..."
+                            Icon="{ui:SymbolIcon Symbol=Search24}"
+                            Text="{Binding SearchQuery, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            MaxWidth="360" Height="36"
+                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                            FontSize="14" />
 
                 <!-- Sort Label -->
                 <TextBlock Grid.Column="2" Text="Sort:" 
@@ -52,6 +49,74 @@
                           Width="180" Height="36"
                           VerticalAlignment="Center" />
             </Grid>
+
+            <!-- ── Empty Library Onboarding State ───────────────────────────────── -->
+            <Border Grid.Row="1"
+                    Background="{DynamicResource CouchmarkCardBrush}"
+                    BorderBrush="{DynamicResource CouchmarkCardBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="40"
+                    MaxWidth="480"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Margin="0,48,0,0"
+                    Visibility="{Binding IsLibraryEmpty, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Center">
+                    <ui:SymbolIcon Symbol="Filmstrip24"
+                                   FontSize="48"
+                                   Foreground="{DynamicResource CouchmarkTextSecondaryBrush}"
+                                   Margin="0,0,0,16" />
+                    <TextBlock Text="No movies in your library yet"
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                               FontSize="20" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Text="Add your Movies folder in Settings and click Scan Now to automatically import posters, ratings, and metadata."
+                               Foreground="{DynamicResource CouchmarkTextSecondaryBrush}"
+                               FontSize="14" TextWrapping="Wrap" TextAlignment="Center"
+                               LineHeight="20" Margin="0,0,0,24" />
+                    <ui:Button Content="Add Folders &amp; Scan"
+                               Icon="{ui:SymbolIcon Symbol=Settings24}"
+                               Appearance="Primary"
+                               Command="{Binding NavigateToSettingsCommand}"
+                               Padding="20,10"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <!-- ── Empty Search Results State ───────────────────────────────────── -->
+            <Border Grid.Row="1"
+                    Background="{DynamicResource CouchmarkCardBrush}"
+                    BorderBrush="{DynamicResource CouchmarkCardBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="36"
+                    MaxWidth="420"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Margin="0,48,0,0"
+                    Visibility="{Binding IsSearchEmpty, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Center">
+                    <ui:SymbolIcon Symbol="Search24"
+                                   FontSize="40"
+                                   Foreground="{DynamicResource CouchmarkTextSecondaryBrush}"
+                                   Margin="0,0,0,14" />
+                    <TextBlock Text="No movies match your search"
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                               FontSize="18" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Text="Try adjusting your search keywords or clear the filter."
+                               Foreground="{DynamicResource CouchmarkTextSecondaryBrush}"
+                               FontSize="13" TextWrapping="Wrap" TextAlignment="Center"
+                               Margin="0,0,0,20" />
+                    <ui:Button Content="Clear Search"
+                               Appearance="Secondary"
+                               Command="{Binding ClearSearchCommand}"
+                               Padding="16,8"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
 
             <!-- ── Movies Poster Cards Grid ────────────────────────────────────── -->
             <ItemsControl Grid.Row="1" ItemsSource="{Binding Movies}">
@@ -91,6 +156,14 @@
                                     <RectangleGeometry Rect="0,0,200,300" RadiusX="8" RadiusY="8" />
                                 </Grid.Clip>
                                 <Image Source="{Binding LocalPosterPath}" Stretch="UniformToFill" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+
+                                <!-- Top-Right Watched Badge -->
+                                <Border Background="#CC000000" CornerRadius="14" Padding="5" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                                        Visibility="{Binding IsWatched, Converter={StaticResource BoolToVisibilityConverter}}"
+                                        ToolTip="Watched">
+                                    <ui:SymbolIcon Symbol="Checkmark24" Foreground="#4CAF50" FontSize="15" />
+                                </Border>
+
                                 <Border VerticalAlignment="Bottom" Background="#CC000000" Padding="12">
                                     <StackPanel>
                                         <TextBlock Text="{Binding Title}" 
@@ -101,6 +174,8 @@
                                                    Foreground="#AAAAAA" 
                                                    FontSize="12" 
                                                    Margin="0,2,0,0" />
+                                        <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="4" Margin="0,6,0,0"
+                                                     Visibility="{Binding ShowProgress, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     </StackPanel>
                                 </Border>
                             </Grid>

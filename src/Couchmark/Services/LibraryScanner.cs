@@ -154,7 +154,10 @@ public partial class LibraryScanner : ILibraryScanner
             }
         }
 
-        await ReconcileAsync(allFiles.Select(f => f.filePath).ToList(), cancellationToken);
+        if (!cancellationToken.IsCancellationRequested)
+        {
+            await ReconcileAsync(allFiles.Select(f => f.filePath).ToList(), cancellationToken);
+        }
 
         _logger.LogInformation("Library scan complete. Processed {Count} files.", allFiles.Count);
     }
@@ -211,11 +214,14 @@ public partial class LibraryScanner : ILibraryScanner
     {
         _logger.LogInformation("Directory removed, marking contents unavailable: {Dir}", directoryPath);
 
+        string normalizedPrefix = directoryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+
         await using var scope = _scopeFactory.CreateAsyncScope();
         CouchmarkDbContext db = scope.ServiceProvider.GetRequiredService<CouchmarkDbContext>();
 
         var movies = await db.MediaItems
-            .Where(m => m.FilePath.StartsWith(directoryPath))
+            .Where(m => m.FilePath.StartsWith(normalizedPrefix))
             .ToListAsync();
 
         foreach (var m in movies)
@@ -224,7 +230,7 @@ public partial class LibraryScanner : ILibraryScanner
         }
 
         var episodes = await db.Episodes
-            .Where(e => e.FilePath.StartsWith(directoryPath))
+            .Where(e => e.FilePath.StartsWith(normalizedPrefix))
             .ToListAsync();
 
         foreach (var ep in episodes)
@@ -457,32 +463,89 @@ public partial class LibraryScanner : ILibraryScanner
 
     private async Task ReconcileAsync(List<string> foundFiles, CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
         await using var scope = _scopeFactory.CreateAsyncScope();
         CouchmarkDbContext db = scope.ServiceProvider.GetRequiredService<CouchmarkDbContext>();
 
         HashSet<string> foundSet = new(foundFiles, StringComparer.OrdinalIgnoreCase);
 
-        List<MediaItem> missingMovies = await db.MediaItems
-            .Where(m => m.FileAvailable)
-            .ToListAsync(cancellationToken);
+        // 1. Eliminate unavailable movies (and any IntroTimestamps referencing them)
+        List<MediaItem> allMovies = await db.MediaItems.ToListAsync(cancellationToken);
+        List<MediaItem> missingMovies = allMovies.Where(m => !foundSet.Contains(m.FilePath)).ToList();
 
-        foreach (MediaItem movie in missingMovies.Where(m => !foundSet.Contains(m.FilePath)))
+        if (missingMovies.Count > 0)
         {
-            movie.FileAvailable = false;
-            _logger.LogInformation("File no longer found, marking unavailable: {File}", movie.FilePath);
+            List<long> missingMovieIds = missingMovies.Select(m => m.Id).ToList();
+            List<IntroTimestamp> movieIntros = await db.IntroTimestamps
+                .Where(it => it.MediaItemId != null && missingMovieIds.Contains(it.MediaItemId.Value))
+                .ToListAsync(cancellationToken);
+
+            if (movieIntros.Count > 0)
+            {
+                db.IntroTimestamps.RemoveRange(movieIntros);
+            }
+
+            db.MediaItems.RemoveRange(missingMovies);
+            foreach (MediaItem movie in missingMovies)
+            {
+                _logger.LogInformation("Movie no longer available, removing from library: {File}", movie.FilePath);
+            }
         }
 
-        List<Episode> missingEpisodes = await db.Episodes
-            .Where(e => e.FileAvailable)
-            .ToListAsync(cancellationToken);
+        // 2. Eliminate unavailable episodes (and any IntroTimestamps referencing them)
+        List<Episode> allEpisodes = await db.Episodes.ToListAsync(cancellationToken);
+        List<Episode> missingEpisodes = allEpisodes.Where(e => !foundSet.Contains(e.FilePath)).ToList();
 
-        foreach (Episode ep in missingEpisodes.Where(e => !foundSet.Contains(e.FilePath)))
+        if (missingEpisodes.Count > 0)
         {
-            ep.FileAvailable = false;
-            _logger.LogInformation("Episode file no longer found: {File}", ep.FilePath);
+            List<long> missingEpisodeIds = missingEpisodes.Select(e => e.Id).ToList();
+            List<IntroTimestamp> episodeIntros = await db.IntroTimestamps
+                .Where(it => it.EpisodeId != null && missingEpisodeIds.Contains(it.EpisodeId.Value))
+                .ToListAsync(cancellationToken);
+
+            if (episodeIntros.Count > 0)
+            {
+                db.IntroTimestamps.RemoveRange(episodeIntros);
+            }
+
+            db.Episodes.RemoveRange(missingEpisodes);
+            foreach (Episode ep in missingEpisodes)
+            {
+                _logger.LogInformation("Episode no longer available, removing from library: {File}", ep.FilePath);
+            }
         }
 
         await db.SaveChangesAsync(cancellationToken);
+
+        // 3. Eliminate seasons that no longer have any episodes
+        List<Season> emptySeasons = await db.Seasons
+            .Where(s => !s.Episodes.Any())
+            .ToListAsync(cancellationToken);
+
+        if (emptySeasons.Count > 0)
+        {
+            db.Seasons.RemoveRange(emptySeasons);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        // 4. Eliminate TV shows that no longer have any seasons
+        List<TvShow> emptyShows = await db.TvShows
+            .Where(t => !t.Seasons.Any())
+            .ToListAsync(cancellationToken);
+
+        if (emptyShows.Count > 0)
+        {
+            db.TvShows.RemoveRange(emptyShows);
+            foreach (TvShow show in emptyShows)
+            {
+                _logger.LogInformation("TV show has no available seasons, removing from library: {Title}", show.Title);
+            }
+            await db.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private static string CleanMovieTitle(string rawFileName)

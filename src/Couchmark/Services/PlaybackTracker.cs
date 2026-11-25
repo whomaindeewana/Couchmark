@@ -179,11 +179,17 @@ public class PlaybackTracker : IPlaybackTracker, IAsyncDisposable
     /// <inheritdoc/>
     public async Task SetWatchedAsync(long? mediaItemId, long? episodeId, bool isWatched)
     {
+        if (mediaItemId is null && episodeId is null) return;
+
         await using var scope = _scopeFactory.CreateAsyncScope();
         CouchmarkDbContext db = scope.ServiceProvider.GetRequiredService<CouchmarkDbContext>();
 
         WatchProgress progress = await GetOrCreateProgressAsync(db, mediaItemId, episodeId);
         progress.IsCompleted = isWatched;
+        if (!isWatched)
+        {
+            progress.PositionSeconds = 0;
+        }
         progress.LastWatchedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
@@ -191,6 +197,43 @@ public class PlaybackTracker : IPlaybackTracker, IAsyncDisposable
         _logger.LogInformation(
             "Manually set watched={Watched} for MediaItemId={MediaItemId}, EpisodeId={EpisodeId}",
             isWatched, mediaItemId, episodeId);
+    }
+
+    /// <inheritdoc/>
+    public async Task SetEpisodesWatchedAsync(IEnumerable<long> episodeIds, bool isWatched)
+    {
+        var ids = episodeIds.Distinct().ToList();
+        if (ids.Count == 0) return;
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        CouchmarkDbContext db = scope.ServiceProvider.GetRequiredService<CouchmarkDbContext>();
+
+        var existingRecords = await db.WatchProgress
+            .Where(w => w.EpisodeId != null && ids.Contains(w.EpisodeId.Value))
+            .ToDictionaryAsync(w => w.EpisodeId!.Value);
+
+        DateTime now = DateTime.UtcNow;
+        foreach (long epId in ids)
+        {
+            if (!existingRecords.TryGetValue(epId, out WatchProgress? progress))
+            {
+                progress = new WatchProgress { EpisodeId = epId };
+                db.WatchProgress.Add(progress);
+            }
+
+            progress.IsCompleted = isWatched;
+            if (!isWatched)
+            {
+                progress.PositionSeconds = 0;
+            }
+            progress.LastWatchedAt = now;
+        }
+
+        await db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Batch set watched={Watched} for {Count} episodes",
+            isWatched, ids.Count);
     }
 
     /// <inheritdoc/>

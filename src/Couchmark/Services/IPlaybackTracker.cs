@@ -48,12 +48,19 @@ public interface IPlaybackTracker
 
     /// <summary>
     /// Manually marks an item as watched (IsCompleted = true) or unwatched (IsCompleted = false).
+    /// When marked unwatched, saved position is reset to 0.
     /// Used by the right-click context menu "Mark as Watched / Unwatched" option.
     /// </summary>
     /// <param name="mediaItemId">Movie ID. Null for episodes.</param>
     /// <param name="episodeId">Episode ID. Null for movies.</param>
     /// <param name="isWatched">True to mark watched, false to mark unwatched.</param>
     Task SetWatchedAsync(long? mediaItemId, long? episodeId, bool isWatched);
+
+    /// <summary>
+    /// Marks a collection of episodes as watched or unwatched in a single database transaction.
+    /// When marked unwatched, saved positions are reset to 0.
+    /// </summary>
+    Task SetEpisodesWatchedAsync(IEnumerable<long> episodeIds, bool isWatched);
 
     /// <summary>
     /// Resets the watch progress of a movie or episode back to 0.

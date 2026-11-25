@@ -4,6 +4,10 @@ using Couchmark.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using Wpf.Ui;
 
 namespace Couchmark.ViewModels;
 
@@ -16,13 +20,18 @@ public partial class SettingsViewModel : ObservableObject
 {
     private readonly IConfiguration _configuration;
     private readonly ILibraryScanner _libraryScanner;
+    private readonly ISnackbarService? _snackbarService;
     private bool _isInitialized;
 
     /// <summary>Initialises the ViewModel and loads saved settings.</summary>
-    public SettingsViewModel(IConfiguration configuration, ILibraryScanner libraryScanner)
+    public SettingsViewModel(
+        IConfiguration configuration,
+        ILibraryScanner libraryScanner,
+        ISnackbarService? snackbarService = null)
     {
         _configuration = configuration;
         _libraryScanner = libraryScanner;
+        _snackbarService = snackbarService;
 
         // Load saved values from appsettings.json into the bound properties
         TmdbApiKey = _configuration["ApiKeys:Tmdb"] ?? string.Empty;
@@ -36,8 +45,8 @@ public partial class SettingsViewModel : ObservableObject
         foreach (string p in tvPaths) TvShowPaths.Add(p);
 
         string savedTheme = _configuration["Appearance:Theme"] ?? "Midnight";
-        SelectedTheme = savedTheme;
-        Themes.ThemeHelper.ApplyTheme(savedTheme);
+        SelectedTheme = AvailableThemes.FirstOrDefault(t => string.Equals(t, savedTheme, StringComparison.OrdinalIgnoreCase)) ?? "Midnight";
+        Themes.ThemeHelper.ApplyTheme(SelectedTheme);
 
         // Load Home screen customizations
         ShowContinueWatching = _configuration.GetValue<bool?>("HomeRows:ShowContinueWatching") ?? true;
@@ -86,7 +95,7 @@ public partial class SettingsViewModel : ObservableObject
         Save();
     }
     
-    public ObservableCollection<string> AvailableThemes { get; } = new(new[] { "White", "Nude", "Midnight", "Vanta Black" });
+    public ObservableCollection<string> AvailableThemes { get; } = new(new[] { "System", "White", "Nude", "Midnight", "Vanta Black" });
 
     // ── Home Screen Customization ─────────────────────────────────────────
 
@@ -121,8 +130,16 @@ public partial class SettingsViewModel : ObservableObject
         OpenFolderDialog dialog = new() { Title = "Select Movie Library Folder" };
         if (dialog.ShowDialog() == true)
         {
-            MoviePaths.Add(dialog.FolderName);
-            StatusMessage = $"Added: {dialog.FolderName}";
+            if (!MoviePaths.Any(p => string.Equals(p, dialog.FolderName, StringComparison.OrdinalIgnoreCase)))
+            {
+                MoviePaths.Add(dialog.FolderName);
+                Save();
+                StatusMessage = $"Added: {dialog.FolderName}";
+            }
+            else
+            {
+                StatusMessage = $"Folder already in list: {dialog.FolderName}";
+            }
         }
     }
 
@@ -133,8 +150,16 @@ public partial class SettingsViewModel : ObservableObject
         OpenFolderDialog dialog = new() { Title = "Select TV Show Library Folder" };
         if (dialog.ShowDialog() == true)
         {
-            TvShowPaths.Add(dialog.FolderName);
-            StatusMessage = $"Added: {dialog.FolderName}";
+            if (!TvShowPaths.Any(p => string.Equals(p, dialog.FolderName, StringComparison.OrdinalIgnoreCase)))
+            {
+                TvShowPaths.Add(dialog.FolderName);
+                Save();
+                StatusMessage = $"Added: {dialog.FolderName}";
+            }
+            else
+            {
+                StatusMessage = $"Folder already in list: {dialog.FolderName}";
+            }
         }
     }
 
@@ -169,22 +194,125 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanScan))]
     private async Task ScanNowAsync()
     {
+        Save();
         IsScanning = true;
         ScanProgress = 0;
         StatusMessage = "Scanning library...";
 
-        // Report progress back to the UI thread
-        Progress<ScanProgress> progress = new(p =>
+        try
         {
-            ScanProgress = (int)((double)p.ProcessedCount / p.TotalCount * 100);
-            StatusMessage = $"Scanning: {p.CurrentFileName} ({p.ProcessedCount}/{p.TotalCount})";
+            // Report progress back to the UI thread
+            Progress<ScanProgress> progress = new(p =>
+            {
+                ScanProgress = p.TotalCount > 0 ? (int)((double)p.ProcessedCount / p.TotalCount * 100) : 0;
+                StatusMessage = $"Scanning: {p.CurrentFileName} ({p.ProcessedCount}/{p.TotalCount})";
+            });
+
+            await Task.Run(() => _libraryScanner.ScanAllAsync(progress));
+
+            ScanProgress = 100;
+            StatusMessage = "Scan complete.";
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "Library scan failed.");
+            StatusMessage = $"Scan error: {ex.Message}";
+        }
+        finally
+        {
+            IsScanning = false;
+        }
+    }
+
+    /// <summary>
+    /// Serializes the current settings into formatted JSON.
+    /// </summary>
+    public string BuildSettingsJson()
+    {
+        var configData = new
+        {
+            ApiKeys = new
+            {
+                Tmdb = TmdbApiKey,
+                Omdb = OmdbApiKey
+            },
+            Libraries = new
+            {
+                MoviePaths = MoviePaths.ToArray(),
+                TvShowPaths = TvShowPaths.ToArray()
+            },
+            Appearance = new
+            {
+                Theme = SelectedTheme
+            },
+            HomeRows = new
+            {
+                ShowContinueWatching = ShowContinueWatching,
+                ShowRecentlyAddedShows = ShowRecentlyAddedShows,
+                ShowRecentlyAddedMovies = ShowRecentlyAddedMovies,
+                RowOrder = SelectedHomeRowOrder
+            }
+        };
+
+        return JsonSerializer.Serialize(configData, new JsonSerializerOptions
+        {
+            WriteIndented = true
         });
+    }
 
-        await _libraryScanner.ScanAllAsync(progress);
+    /// <summary>
+    /// Writes the current settings JSON to the specified target file path.
+    /// </summary>
+    public void ExportToFile(string filePath)
+    {
+        string json = BuildSettingsJson();
+        string? directory = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+        File.WriteAllText(filePath, json);
+    }
 
-        IsScanning = false;
-        ScanProgress = 100;
-        StatusMessage = "Scan complete.";
+    /// <summary>
+    /// Opens a SaveFileDialog to export all current Couchmark settings to a JSON file.
+    /// </summary>
+    [RelayCommand]
+    private void ExportSettings()
+    {
+        try
+        {
+            SaveFileDialog dialog = new()
+            {
+                Title = "Export Couchmark Settings",
+                Filter = "JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+                DefaultExt = ".json",
+                FileName = $"couchmark-settings-{DateTime.Now:yyyy-MM-dd}.json"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                ExportToFile(dialog.FileName);
+                StatusMessage = $"Settings exported to: {dialog.FileName}";
+
+                _snackbarService?.Show(
+                    "Settings Exported",
+                    $"Saved settings backup to {Path.GetFileName(dialog.FileName)}.",
+                    Wpf.Ui.Controls.ControlAppearance.Success,
+                    new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.Checkmark24),
+                    TimeSpan.FromSeconds(3));
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error exporting settings: {ex.Message}";
+            _snackbarService?.Show(
+                "Export Failed",
+                ex.Message,
+                Wpf.Ui.Controls.ControlAppearance.Danger,
+                new Wpf.Ui.Controls.SymbolIcon(Wpf.Ui.Controls.SymbolRegular.ErrorCircle24),
+                TimeSpan.FromSeconds(3));
+        }
     }
 
     /// <summary>
@@ -197,47 +325,18 @@ public partial class SettingsViewModel : ObservableObject
 
         try
         {
-            var configData = new
-            {
-                ApiKeys = new
-                {
-                    Tmdb = TmdbApiKey,
-                    Omdb = OmdbApiKey
-                },
-                Libraries = new
-                {
-                    MoviePaths = MoviePaths.ToArray(),
-                    TvShowPaths = TvShowPaths.ToArray()
-                },
-                Appearance = new
-                {
-                    Theme = SelectedTheme
-                },
-                HomeRows = new
-                {
-                    ShowContinueWatching = ShowContinueWatching,
-                    ShowRecentlyAddedShows = ShowRecentlyAddedShows,
-                    ShowRecentlyAddedMovies = ShowRecentlyAddedMovies,
-                    RowOrder = SelectedHomeRowOrder
-                }
-            };
-
-            string json = System.Text.Json.JsonSerializer.Serialize(configData, new System.Text.Json.JsonSerializerOptions 
-            { 
-                WriteIndented = true 
-            });
-
-            string appDataPath = System.IO.Path.Combine(
-                System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData),
+            string appDataPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 Constants.AppConstants.AppName);
-                
-            System.IO.Directory.CreateDirectory(appDataPath);
-            string path = System.IO.Path.Combine(appDataPath, "appsettings.local.json");
-            System.IO.File.WriteAllText(path, json);
+
+            string path = Path.Combine(appDataPath, "appsettings.local.json");
+            ExportToFile(path);
+
+            (_configuration as IConfigurationRoot)?.Reload();
 
             StatusMessage = "Settings saved successfully! You can scan your library now.";
         }
-        catch (System.Exception ex)
+        catch (Exception ex)
         {
             StatusMessage = $"Error saving settings: {ex.Message}";
         }

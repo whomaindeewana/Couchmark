@@ -74,6 +74,19 @@
                         <RectangleGeometry Rect="0,0,200,300" RadiusX="8" RadiusY="8" />
                     </Grid.Clip>
                     <Image Source="{Binding PosterPath}" Stretch="UniformToFill" />
+
+                    <!-- Top-Right Watched / Unwatched Badges -->
+                    <Border Background="#CC000000" CornerRadius="14" Padding="5" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                            Visibility="{Binding IsWatched, Converter={StaticResource BoolToVisibilityConverter}}"
+                            ToolTip="All episodes watched">
+                        <ui:SymbolIcon Symbol="Checkmark24" Foreground="#4CAF50" FontSize="15" />
+                    </Border>
+                    <Border Background="#E62563EB" CornerRadius="12" Padding="8,3" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                            Visibility="{Binding HasUnwatched, Converter={StaticResource BoolToVisibilityConverter}}"
+                            ToolTip="Unwatched episodes">
+                        <TextBlock Text="{Binding UnwatchedCount}" Foreground="White" FontSize="12" FontWeight="Bold" />
+                    </Border>
+
                     <Border VerticalAlignment="Bottom" Background="#D8000000" Padding="12">
                         <StackPanel>
                             <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
@@ -114,10 +127,20 @@
                         <RectangleGeometry Rect="0,0,200,300" RadiusX="8" RadiusY="8" />
                     </Grid.Clip>
                     <Image Source="{Binding PosterPath}" Stretch="UniformToFill" />
+
+                    <!-- Top-Right Watched Badge -->
+                    <Border Background="#CC000000" CornerRadius="14" Padding="5" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8"
+                            Visibility="{Binding IsWatched, Converter={StaticResource BoolToVisibilityConverter}}"
+                            ToolTip="Watched">
+                        <ui:SymbolIcon Symbol="Checkmark24" Foreground="#4CAF50" FontSize="15" />
+                    </Border>
+
                     <Border VerticalAlignment="Bottom" Background="#D8000000" Padding="12">
                         <StackPanel>
                             <TextBlock Text="{Binding Title}" Foreground="White" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="{Binding Subtitle}" Foreground="LightGray" FontSize="12" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+                            <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="4" Margin="0,6,0,0"
+                                         Visibility="{Binding ShowProgress, Converter={StaticResource BoolToVisibilityConverter}}" />
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -143,51 +166,119 @@
                 </StackPanel>
             </Border>
 
+            <!-- ── Empty Library Onboarding Card ───────────────────────────── -->
+            <Border Background="{DynamicResource CouchmarkCardBrush}"
+                    BorderBrush="{DynamicResource CouchmarkCardBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="40"
+                    MaxWidth="520"
+                    HorizontalAlignment="Center"
+                    Margin="0,24,0,24"
+                    Visibility="{Binding IsLibraryEmpty, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Center">
+                    <ui:SymbolIcon Symbol="VideoClip24"
+                                   FontSize="52"
+                                   Foreground="#60A5FA"
+                                   Margin="0,0,0,16" />
+                    <TextBlock Text="Your Couchmark library is empty"
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                               FontSize="22" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Text="Point Couchmark at your local Movies and TV Shows folders in Settings, then click Scan Now to fetch artwork and start watching."
+                               Foreground="{DynamicResource CouchmarkTextSecondaryBrush}"
+                               FontSize="14" TextWrapping="Wrap" TextAlignment="Center"
+                               LineHeight="22" Margin="0,0,0,24" />
+                    <ui:Button Content="Add Folders &amp; Scan"
+                               Icon="{ui:SymbolIcon Symbol=Settings24}"
+                               Appearance="Primary"
+                               Command="{Binding NavigateToSettingsCommand}"
+                               Padding="22,10"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
+            <!-- ── All Rows Hidden / Empty Fallback ────────────────────────── -->
+            <Border Background="{DynamicResource CouchmarkCardBrush}"
+                    BorderBrush="{DynamicResource CouchmarkCardBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="32"
+                    MaxWidth="480"
+                    HorizontalAlignment="Center"
+                    Margin="0,24,0,24"
+                    Visibility="{Binding IsAllRowsEmptyOrHidden, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel HorizontalAlignment="Center">
+                    <ui:SymbolIcon Symbol="Grid24"
+                                   FontSize="40"
+                                   Foreground="{DynamicResource CouchmarkTextSecondaryBrush}"
+                                   Margin="0,0,0,12" />
+                    <TextBlock Text="Nothing to display on Home"
+                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                               FontSize="18" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Text="All Home screen rows are currently hidden or have no matching items. Adjust your Home Screen preferences in Settings."
+                               Foreground="{DynamicResource CouchmarkTextSecondaryBrush}"
+                               FontSize="13" TextWrapping="Wrap" TextAlignment="Center"
+                               LineHeight="20" Margin="0,0,0,20" />
+                    <ui:Button Content="Open Settings"
+                               Appearance="Secondary"
+                               Command="{Binding NavigateToSettingsCommand}"
+                               Padding="16,8"
+                               HorizontalAlignment="Center" />
+                </StackPanel>
+            </Border>
+
             <!-- ── ORDER 1: Continue Watching First ────────────────────────── -->
             <StackPanel Visibility="{Binding IsContinueWatchingFirst, Converter={StaticResource BoolToVisibilityConverter}}">
                 <!-- Continue Watching Row -->
                 <StackPanel Visibility="{Binding ShowContinueWatching, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Text="Continue Watching" 
-                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
-                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
-                               Visibility="{Binding ContinueWatchingItems.Count, Converter={StaticResource IntToVisibilityConverter}}" />
-                    <ItemsControl ItemsSource="{Binding ContinueWatchingItems}" ItemTemplate="{StaticResource ContinueWatchingCardTemplate}" Margin="0,0,0,28">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
+                    <StackPanel Visibility="{Binding ContinueWatchingItems.Count, Converter={StaticResource IntToVisibilityConverter}}" Margin="0,0,0,28">
+                        <TextBlock Text="Continue Watching" 
+                                   Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                                   FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />
+                        <ItemsControl ItemsSource="{Binding ContinueWatchingItems}" ItemTemplate="{StaticResource ContinueWatchingCardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Recently Added TV Shows Row -->
                 <StackPanel Visibility="{Binding ShowRecentlyAddedShows, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Text="Recently Added TV Shows" 
-                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
-                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
-                               Visibility="{Binding RecentlyAddedShows.Count, Converter={StaticResource IntToVisibilityConverter}}" />
-                    <ItemsControl ItemsSource="{Binding RecentlyAddedShows}" ItemTemplate="{StaticResource RecentShowCardTemplate}" Margin="0,0,0,28">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
+                    <StackPanel Visibility="{Binding RecentlyAddedShows.Count, Converter={StaticResource IntToVisibilityConverter}}" Margin="0,0,0,28">
+                        <TextBlock Text="Recently Added TV Shows" 
+                                   Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                                   FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />
+                        <ItemsControl ItemsSource="{Binding RecentlyAddedShows}" ItemTemplate="{StaticResource RecentShowCardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Recently Added Movies Row -->
                 <StackPanel Visibility="{Binding ShowRecentlyAddedMovies, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Text="Recently Added Movies" 
-                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
-                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
-                               Visibility="{Binding RecentlyAddedMovies.Count, Converter={StaticResource IntToVisibilityConverter}}" />
-                    <ItemsControl ItemsSource="{Binding RecentlyAddedMovies}" ItemTemplate="{StaticResource RecentMovieCardTemplate}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
+                    <StackPanel Visibility="{Binding RecentlyAddedMovies.Count, Converter={StaticResource IntToVisibilityConverter}}">
+                        <TextBlock Text="Recently Added Movies" 
+                                   Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                                   FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />
+                        <ItemsControl ItemsSource="{Binding RecentlyAddedMovies}" ItemTemplate="{StaticResource RecentMovieCardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
             </StackPanel>
 
@@ -195,47 +286,50 @@
             <StackPanel Visibility="{Binding IsContinueWatchingFirst, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                 <!-- Recently Added TV Shows Row -->
                 <StackPanel Visibility="{Binding ShowRecentlyAddedShows, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Text="Recently Added TV Shows" 
-                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
-                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
-                               Visibility="{Binding RecentlyAddedShows.Count, Converter={StaticResource IntToVisibilityConverter}}" />
-                    <ItemsControl ItemsSource="{Binding RecentlyAddedShows}" ItemTemplate="{StaticResource RecentShowCardTemplate}" Margin="0,0,0,28">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
+                    <StackPanel Visibility="{Binding RecentlyAddedShows.Count, Converter={StaticResource IntToVisibilityConverter}}" Margin="0,0,0,28">
+                        <TextBlock Text="Recently Added TV Shows" 
+                                   Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                                   FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />
+                        <ItemsControl ItemsSource="{Binding RecentlyAddedShows}" ItemTemplate="{StaticResource RecentShowCardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Recently Added Movies Row -->
                 <StackPanel Visibility="{Binding ShowRecentlyAddedMovies, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Text="Recently Added Movies" 
-                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
-                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
-                               Visibility="{Binding RecentlyAddedMovies.Count, Converter={StaticResource IntToVisibilityConverter}}" />
-                    <ItemsControl ItemsSource="{Binding RecentlyAddedMovies}" ItemTemplate="{StaticResource RecentMovieCardTemplate}" Margin="0,0,0,28">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
+                    <StackPanel Visibility="{Binding RecentlyAddedMovies.Count, Converter={StaticResource IntToVisibilityConverter}}" Margin="0,0,0,28">
+                        <TextBlock Text="Recently Added Movies" 
+                                   Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                                   FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />
+                        <ItemsControl ItemsSource="{Binding RecentlyAddedMovies}" ItemTemplate="{StaticResource RecentMovieCardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
 
                 <!-- Continue Watching Row -->
                 <StackPanel Visibility="{Binding ShowContinueWatching, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <TextBlock Text="Continue Watching" 
-                               Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
-                               FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" 
-                               Visibility="{Binding ContinueWatchingItems.Count, Converter={StaticResource IntToVisibilityConverter}}" />
-                    <ItemsControl ItemsSource="{Binding ContinueWatchingItems}" ItemTemplate="{StaticResource ContinueWatchingCardTemplate}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
+                    <StackPanel Visibility="{Binding ContinueWatchingItems.Count, Converter={StaticResource IntToVisibilityConverter}}">
+                        <TextBlock Text="Continue Watching" 
+                                   Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
+                                   FontSize="20" FontWeight="SemiBold" Margin="0,0,0,16" />
+                        <ItemsControl ItemsSource="{Binding ContinueWatchingItems}" ItemTemplate="{StaticResource ContinueWatchingCardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
                 </StackPanel>
             </StackPanel>
 

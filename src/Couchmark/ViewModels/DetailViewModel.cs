@@ -14,13 +14,16 @@ using System.Threading.Tasks;
 
 namespace Couchmark.ViewModels;
 
-public class SeasonDisplayItem
+public partial class SeasonDisplayItem : ObservableObject
 {
     public long? SeasonId { get; set; }
     public int SeasonNumber { get; set; }
     public string Title { get; set; } = string.Empty;
     public bool IsAvailable { get; set; }
-    public bool IsWatched { get; set; }
+
+    [ObservableProperty]
+    private bool _isWatched;
+
     public double Opacity => IsAvailable ? 1.0 : 0.45;
 }
 
@@ -863,6 +866,12 @@ public partial class DetailViewModel : ObservableObject, Wpf.Ui.Controls.INaviga
                 foreach (var ep in episodes)
                 {
                     Episodes.Add(ep);
+                }
+
+                if (SelectedSeason != null && SelectedSeason.SeasonId == seasonId)
+                {
+                    SelectedSeason.IsWatched = episodes.Count > 0 &&
+                                               episodes.All(e => e.WatchProgress != null && e.WatchProgress.IsCompleted);
                 }
             });
         }

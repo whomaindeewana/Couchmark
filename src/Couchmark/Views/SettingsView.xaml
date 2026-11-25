@@ -23,14 +23,22 @@
                                FontSize="14" Margin="0,4,0,0" />
                 </StackPanel>
 
-                <ui:Button Content="Save Settings"
-                           Appearance="Primary"
-                           Icon="{ui:SymbolIcon Symbol=Save24}"
-                           Command="{Binding SaveCommand}"
-                           HorizontalAlignment="Right"
-                           VerticalAlignment="Center"
-                           Padding="20,10"
-                           FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <ui:Button Content="Export Settings"
+                               Appearance="Secondary"
+                               Icon="{ui:SymbolIcon Symbol=ArrowExportUp24}"
+                               Command="{Binding ExportSettingsCommand}"
+                               Padding="16,10"
+                               Margin="0,0,10,0"
+                               FontWeight="SemiBold" />
+
+                    <ui:Button Content="Save Settings"
+                               Appearance="Primary"
+                               Icon="{ui:SymbolIcon Symbol=Save24}"
+                               Command="{Binding SaveCommand}"
+                               Padding="20,10"
+                               FontWeight="SemiBold" />
+                </StackPanel>
             </Grid>
 
             <!-- ── Masonry Grid Layout (Two Balanced Columns) ────────────────── -->
@@ -209,7 +217,7 @@
                             <TextBlock Text="App Theme" 
                                        Foreground="{DynamicResource CouchmarkTextPrimaryBrush}"
                                        FontWeight="Medium" Margin="0,0,0,4" />
-                            <TextBlock Text="Choose from 4 custom palettes: White, Nude (gentle on eyes), Midnight (cool navy), or Vanta Black (true OLED)."
+                            <TextBlock Text="Choose System (follows Windows Light/Dark mode) or one of 4 custom palettes: White, Nude (gentle on eyes), Midnight (cool navy), or Vanta Black (true OLED)."
                                        Foreground="{DynamicResource CouchmarkTextSecondaryBrush}"
                                        TextWrapping="Wrap" FontSize="12" Margin="0,0,0,12" />
 

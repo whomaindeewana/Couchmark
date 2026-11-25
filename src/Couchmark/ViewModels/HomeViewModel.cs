@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Couchmark.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,10 +8,11 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 
 namespace Couchmark.ViewModels;
 
-public class HomeMediaCard
+public partial class HomeMediaCard : ObservableObject
 {
     public long Id { get; set; }
     public string Title { get; set; } = string.Empty;
@@ -18,10 +20,22 @@ public class HomeMediaCard
     public string PosterPath { get; set; } = string.Empty;
     public bool IsMovie { get; set; }
     public bool IsEpisode { get; set; }
-    
-    // Progress info
-    public double ProgressPercent { get; set; }
-    public bool ShowProgress => ProgressPercent > 0 && ProgressPercent < 100;
+    public bool IsFromContinueWatching { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowProgress))]
+    private double _progressPercent;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowProgress))]
+    private bool _isWatched;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUnwatched))]
+    private int _unwatchedCount;
+
+    public bool HasUnwatched => UnwatchedCount > 0;
+    public bool ShowProgress => !IsWatched && ProgressPercent > 0 && ProgressPercent < 100;
 }
 
 public partial class HomeViewModel : ObservableObject, Wpf.Ui.Controls.INavigationAware
@@ -31,6 +45,8 @@ public partial class HomeViewModel : ObservableObject, Wpf.Ui.Controls.INavigati
     private readonly IConfiguration _configuration;
     private readonly Couchmark.Services.IPlaybackTracker _playbackTracker;
     private readonly Wpf.Ui.ISnackbarService _snackbarService;
+    private readonly SemaphoreSlim _loadSemaphore = new(1, 1);
+    private CancellationTokenSource? _loadCts;
 
     public HomeViewModel(
         IServiceScopeFactory scopeFactory,
@@ -64,6 +80,12 @@ public partial class HomeViewModel : ObservableObject, Wpf.Ui.Controls.INavigati
     [ObservableProperty]
     private bool _isContinueWatchingFirst = true;
 
+    [ObservableProperty]
+    private bool _isLibraryEmpty;
+
+    [ObservableProperty]
+    private bool _isAllRowsEmptyOrHidden;
+
     public ObservableCollection<HomeMediaCard> ContinueWatchingItems { get; } = new();
     public ObservableCollection<HomeMediaCard> RecentlyAddedShows { get; } = new();
     public ObservableCollection<HomeMediaCard> RecentlyAddedMovies { get; } = new();
@@ -71,10 +93,19 @@ public partial class HomeViewModel : ObservableObject, Wpf.Ui.Controls.INavigati
     public void OnNavigatedTo()
     {
         LoadPreferences();
-        _ = LoadDataAsync();
+        LoadDataAsync().FireAndForgetSafeAsync();
     }
 
-    public void OnNavigatedFrom() { }
+    public void OnNavigatedFrom()
+    {
+        _loadCts?.Cancel();
+    }
+
+    [RelayCommand]
+    private void NavigateToSettings()
+    {
+        _navigationService.NavigateTo<Views.SettingsView>();
+    }
 
     private void LoadPreferences()
     {
@@ -118,96 +149,176 @@ public partial class HomeViewModel : ObservableObject, Wpf.Ui.Controls.INavigati
 
     private async Task LoadDataAsync()
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<Couchmark.Data.CouchmarkDbContext>();
+        _loadCts?.Cancel();
+        _loadCts = new CancellationTokenSource();
+        CancellationToken token = _loadCts.Token;
 
-        // 1. Load Continue Watching
-        if (ShowContinueWatching)
+        await _loadSemaphore.WaitAsync(token);
+        try
         {
-            var progressItems = await dbContext.WatchProgress
-                .Include(w => w.Episode).ThenInclude(e => e!.Season).ThenInclude(s => s!.TvShow)
-                .Include(w => w.MediaItem)
-                .Where(w => !w.IsCompleted && w.PositionSeconds > 0)
-                .OrderByDescending(w => w.LastWatchedAt)
-                .Take(12)
-                .ToListAsync();
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<Couchmark.Data.CouchmarkDbContext>();
 
-            ContinueWatchingItems.Clear();
-            foreach (var p in progressItems)
+            bool hasAnyShows = await dbContext.TvShows
+                .AsNoTracking()
+                .AnyAsync(t => t.Seasons.Any(s => s.Episodes.Any(e => e.FileAvailable)), token);
+            bool hasAnyMovies = await dbContext.MediaItems
+                .AsNoTracking()
+                .AnyAsync(m => m.FileAvailable, token);
+            bool libraryEmpty = !hasAnyShows && !hasAnyMovies;
+
+            List<HomeMediaCard> continueWatchingList = [];
+            List<HomeMediaCard> recentShowsList = [];
+            List<HomeMediaCard> recentMoviesList = [];
+
+            // 1. Load Continue Watching
+            if (ShowContinueWatching)
             {
-                if (p.Episode != null && p.Episode.Season?.TvShow != null)
+                var progressItems = await dbContext.WatchProgress
+                    .AsNoTracking()
+                    .Include(w => w.Episode).ThenInclude(e => e!.Season).ThenInclude(s => s!.TvShow)
+                    .Include(w => w.MediaItem)
+                    .Where(w => !w.IsCompleted && w.PositionSeconds > 0 &&
+                                ((w.Episode != null && w.Episode.FileAvailable) ||
+                                 (w.MediaItem != null && w.MediaItem.FileAvailable)))
+                    .OrderByDescending(w => w.LastWatchedAt)
+                    .Take(12)
+                    .ToListAsync(token);
+
+                foreach (var p in progressItems)
                 {
-                    ContinueWatchingItems.Add(new HomeMediaCard
+                    if (p.Episode != null && p.Episode.Season?.TvShow != null)
                     {
-                        Id = p.Episode.Id,
+                        continueWatchingList.Add(new HomeMediaCard
+                        {
+                            Id = p.Episode.Id,
+                            IsMovie = false,
+                            IsEpisode = true,
+                            IsFromContinueWatching = true,
+                            Title = p.Episode.Season.TvShow.Title,
+                            Subtitle = $"S{p.Episode.SeasonNumber:D2}E{p.Episode.EpisodeNumber:D2} - {p.Episode.Title}",
+                            PosterPath = p.Episode.Season.TvShow.LocalPosterPath ?? string.Empty,
+                            ProgressPercent = p.DurationSeconds > 0 ? (p.PositionSeconds * 100.0) / p.DurationSeconds : 0
+                        });
+                    }
+                    else if (p.MediaItem != null)
+                    {
+                        continueWatchingList.Add(new HomeMediaCard
+                        {
+                            Id = p.MediaItem.Id,
+                            IsMovie = true,
+                            IsEpisode = false,
+                            IsFromContinueWatching = true,
+                            Title = p.MediaItem.Title,
+                            Subtitle = "Movie",
+                            PosterPath = p.MediaItem.LocalPosterPath ?? string.Empty,
+                            ProgressPercent = p.DurationSeconds > 0 ? (p.PositionSeconds * 100.0) / p.DurationSeconds : 0
+                        });
+                    }
+                }
+            }
+
+            // 2. Load Recently Added TV Shows
+            if (ShowRecentlyAddedShows)
+            {
+                var recentShows = await dbContext.TvShows
+                    .AsNoTracking()
+                    .Where(t => t.Seasons.Any(s => s.Episodes.Any(e => e.FileAvailable)))
+                    .Include(t => t.Seasons)
+                    .ThenInclude(s => s.Episodes)
+                    .ThenInclude(e => e.WatchProgress)
+                    .OrderByDescending(t => t.DateAdded)
+                    .Take(12)
+                    .ToListAsync(token);
+
+                foreach (var show in recentShows)
+                {
+                    var episodes = show.Seasons.SelectMany(s => s.Episodes).Where(e => e.FileAvailable).ToList();
+                    int totalEps = episodes.Count;
+                    int unwatchedEps = episodes.Count(e => e.WatchProgress == null || !e.WatchProgress.IsCompleted);
+
+                    recentShowsList.Add(new HomeMediaCard
+                    {
+                        Id = show.Id,
                         IsMovie = false,
-                        IsEpisode = true,
-                        Title = p.Episode.Season.TvShow.Title,
-                        Subtitle = $"S{p.Episode.SeasonNumber:D2}E{p.Episode.EpisodeNumber:D2} - {p.Episode.Title}",
-                        PosterPath = p.Episode.Season.TvShow.LocalPosterPath ?? string.Empty,
-                        ProgressPercent = p.DurationSeconds > 0 ? (p.PositionSeconds * 100.0) / p.DurationSeconds : 0
+                        IsEpisode = false,
+                        Title = show.Title,
+                        Subtitle = show.FirstAirYear > 0 ? show.FirstAirYear.ToString() : "Series",
+                        PosterPath = show.LocalPosterPath ?? string.Empty,
+                        UnwatchedCount = unwatchedEps,
+                        IsWatched = totalEps > 0 && unwatchedEps == 0
                     });
                 }
-                else if (p.MediaItem != null)
+            }
+
+            // 3. Load Recently Added Movies
+            if (ShowRecentlyAddedMovies)
+            {
+                var recentMovies = await dbContext.MediaItems
+                    .AsNoTracking()
+                    .Where(m => m.FileAvailable)
+                    .Include(m => m.WatchProgress)
+                    .OrderByDescending(m => m.DateAdded)
+                    .Take(12)
+                    .ToListAsync(token);
+
+                foreach (var movie in recentMovies)
                 {
-                    ContinueWatchingItems.Add(new HomeMediaCard
+                    double progressPct = (movie.WatchProgress != null && movie.WatchProgress.DurationSeconds > 0 && movie.WatchProgress.PositionSeconds > 0)
+                        ? (movie.WatchProgress.PositionSeconds * 100.0) / movie.WatchProgress.DurationSeconds
+                        : 0;
+
+                    recentMoviesList.Add(new HomeMediaCard
                     {
-                        Id = p.MediaItem.Id,
+                        Id = movie.Id,
                         IsMovie = true,
                         IsEpisode = false,
-                        Title = p.MediaItem.Title,
-                        Subtitle = "Movie",
-                        PosterPath = p.MediaItem.LocalPosterPath ?? string.Empty,
-                        ProgressPercent = p.DurationSeconds > 0 ? (p.PositionSeconds * 100.0) / p.DurationSeconds : 0
+                        Title = movie.Title,
+                        Subtitle = movie.ReleaseYear > 0 ? movie.ReleaseYear.ToString() : "Movie",
+                        PosterPath = movie.LocalPosterPath ?? string.Empty,
+                        IsWatched = movie.WatchProgress?.IsCompleted ?? false,
+                        ProgressPercent = progressPct
                     });
                 }
             }
-        }
 
-        // 2. Load Recently Added TV Shows
-        if (ShowRecentlyAddedShows)
-        {
-            var recentShows = await dbContext.TvShows
-                .OrderByDescending(t => t.DateAdded)
-                .Take(12)
-                .ToListAsync();
+            if (token.IsCancellationRequested) return;
 
-            RecentlyAddedShows.Clear();
-            foreach (var show in recentShows)
+            void ApplyToUi()
             {
-                RecentlyAddedShows.Add(new HomeMediaCard
-                {
-                    Id = show.Id,
-                    IsMovie = false,
-                    IsEpisode = false,
-                    Title = show.Title,
-                    Subtitle = show.FirstAirYear > 0 ? show.FirstAirYear.ToString() : "Series",
-                    PosterPath = show.LocalPosterPath ?? string.Empty
-                });
+                ContinueWatchingItems.Clear();
+                foreach (var item in continueWatchingList) ContinueWatchingItems.Add(item);
+
+                RecentlyAddedShows.Clear();
+                foreach (var item in recentShowsList) RecentlyAddedShows.Add(item);
+
+                RecentlyAddedMovies.Clear();
+                foreach (var item in recentMoviesList) RecentlyAddedMovies.Add(item);
+
+                IsLibraryEmpty = libraryEmpty;
+                IsAllRowsEmptyOrHidden = !libraryEmpty
+                    && ContinueWatchingItems.Count == 0
+                    && RecentlyAddedShows.Count == 0
+                    && RecentlyAddedMovies.Count == 0;
+            }
+
+            if (System.Windows.Application.Current?.Dispatcher != null)
+            {
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(ApplyToUi);
+            }
+            else
+            {
+                ApplyToUi();
             }
         }
-
-        // 3. Load Recently Added Movies
-        if (ShowRecentlyAddedMovies)
+        catch (OperationCanceledException) { }
+        catch (System.Exception ex)
         {
-            var recentMovies = await dbContext.MediaItems
-                .OrderByDescending(m => m.DateAdded)
-                .Take(12)
-                .ToListAsync();
-
-            RecentlyAddedMovies.Clear();
-            foreach (var movie in recentMovies)
-            {
-                RecentlyAddedMovies.Add(new HomeMediaCard
-                {
-                    Id = movie.Id,
-                    IsMovie = true,
-                    IsEpisode = false,
-                    Title = movie.Title,
-                    Subtitle = movie.ReleaseYear > 0 ? movie.ReleaseYear.ToString() : "Movie",
-                    PosterPath = movie.LocalPosterPath ?? string.Empty
-                });
-            }
+            Serilog.Log.Error(ex, "Failed to load HomeView data.");
+        }
+        finally
+        {
+            _loadSemaphore.Release();
         }
     }
 
@@ -216,9 +327,13 @@ public partial class HomeViewModel : ObservableObject, Wpf.Ui.Controls.INavigati
     {
         if (card == null) return;
 
-        if (card.IsMovie)
+        if (card.IsFromContinueWatching || card.IsEpisode)
         {
-            if (card.ProgressPercent > 0)
+            _navigationService.NavigateTo<Views.PlayerView>(new Services.PlayerNavigationArgs(card.Id, IsMovie: card.IsMovie));
+        }
+        else if (card.IsMovie)
+        {
+            if (card.ProgressPercent > 0 && !card.IsWatched)
             {
                 _navigationService.NavigateTo<Views.PlayerView>(new Services.PlayerNavigationArgs(card.Id, IsMovie: true));
             }
@@ -229,16 +344,8 @@ public partial class HomeViewModel : ObservableObject, Wpf.Ui.Controls.INavigati
         }
         else
         {
-            // If it's an episode in "Continue Watching", play it directly
-            if (card.IsEpisode || card.ProgressPercent > 0)
-            {
-                _navigationService.NavigateTo<Views.PlayerView>(new Services.PlayerNavigationArgs(card.Id, IsMovie: false));
-            }
-            else
-            {
-                // Recently added TV show -> go to DetailView
-                _navigationService.NavigateTo<Views.DetailView>(card.Id);
-            }
+            // Recently added TV show -> go to DetailView
+            _navigationService.NavigateTo<Views.DetailView>(card.Id);
         }
     }
 
@@ -374,18 +481,11 @@ public partial class HomeViewModel : ObservableObject, Wpf.Ui.Controls.INavigati
 
                 if (fullShow != null)
                 {
-                    bool anyUnwatched = fullShow.Seasons.SelectMany(s => s.Episodes)
-                        .Any(e => e.WatchProgress == null || !e.WatchProgress.IsCompleted);
-
+                    var episodes = fullShow.Seasons.SelectMany(s => s.Episodes).Where(e => e.FileAvailable).ToList();
+                    bool anyUnwatched = episodes.Any(e => e.WatchProgress == null || !e.WatchProgress.IsCompleted);
                     bool newWatchedStatus = anyUnwatched;
 
-                    foreach (var season in fullShow.Seasons)
-                    {
-                        foreach (var ep in season.Episodes)
-                        {
-                            await _playbackTracker.SetWatchedAsync(null, ep.Id, newWatchedStatus);
-                        }
-                    }
+                    await _playbackTracker.SetEpisodesWatchedAsync(episodes.Select(e => e.Id), newWatchedStatus);
 
                     await LoadDataAsync();
 

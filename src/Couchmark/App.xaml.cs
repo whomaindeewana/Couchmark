@@ -142,6 +142,8 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        Themes.ThemeHelper.StopWatchingSystemTheme();
+
         if (_host is not null)
         {
             try 
